@@ -3,22 +3,25 @@ pragma solidity ^0.8.8;
 
 import "./PriceConverter.sol";
 
+error youNotOwner123();
+error failed();
+
 contract FundMe {
     using PriceConverter for uint256;
 
-    address public owner;
+    address public immutable i_owner;
 
     constructor() {
-      owner = msg.sender;
+      i_owner = msg.sender;
     }
 
     address[] public funders;
     mapping(address => uint) public addressToAmountFunded;
     
-    uint public miniUSD = 10 * 1e18; //因為最小單位是wei
+    uint public constant MINIUSD = 10 * 1e18; //因為最小單位是wei
 
     function fund() public payable {
-        require(msg.value.getConversionRate() > miniUSD,"The amount you sent is too low");
+        require(msg.value.getConversionRate() > MINIUSD,"The amount you sent is too low");
         funders.push(msg.sender);
         addressToAmountFunded[msg.sender] += msg.value;
     }
@@ -57,7 +60,34 @@ contract FundMe {
     }
 
     modifier onlyOwner {
-      require(msg.sender == owner,"you are not owner");
+      //require(msg.sender == i_owner,"you are not owner");
+      if(msg.sender != i_owner) { revert youNotOwner123(); }
       _;
     }
+
+    receive() external payable {
+      fund();
+    }
+
+    fallback() external payable {
+      fund();
+    }
+
+    //使用transfer 將合約中的資產 轉特定金額到外部 特定的一個地址中 需要owner簽署
+    function transferFromContract(address payable _to,uint _value) public payable onlyOwner {
+      _to.transfer(_value);
+    }
+
+    //使用send 將合約中的資產 轉特定金額到外部 特定的一個地址中 需要owner簽署
+    function sendFromContract(address payable _to,uint _value) public payable onlyOwner {
+      bool sent = _to.send(_value);
+      if(sent != true){ revert failed(); }
+    }
+
+    //使用call 將合約中的資產 轉特定金額到外部 特定的一個地址中 需要owner簽署
+    function callFromContract(address payable _to,uint _value) public payable onlyOwner {
+      (bool call,) = _to.call{value: _value}("");
+      if(call != true) { revert failed(); }
+    }
+
 }
